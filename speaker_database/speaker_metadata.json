@@ -1,0 +1,218 @@
+{
+  "speakers": {
+    "e0ef173d8c7deb8a": {
+      "name": "Speaker_1",
+      "created": "2025-06-16T02:55:06.290184",
+      "sample_count": 1
+    },
+    "56bdc4b0653b54ca": {
+      "name": "Luca Voros",
+      "created": "2025-06-16T03:04:26.277169",
+      "sample_count": 19,
+      "last_updated": "2025-06-16T03:37:09.353433"
+    },
+    "d501c2da6d9f279f": {
+      "name": "Zeid Ruzouq",
+      "created": "2025-06-16T03:12:41.539767",
+      "sample_count": 16,
+      "last_updated": "2025-06-16T03:37:09.916142"
+    },
+    "d1d82fd6b2dc5679": {
+      "name": "Speaker_8",
+      "created": "2025-06-16T03:22:55.244365",
+      "sample_count": 10,
+      "last_updated": "2025-06-16T03:22:55.442711"
+    },
+    "19b08245ca02d5b6": {
+      "name": "Speaker_9",
+      "created": "2025-06-16T03:22:55.487812",
+      "sample_count": 8,
+      "last_updated": "2025-06-16T03:22:55.633814"
+    },
+    "b86c4df09fe6eaf9": {
+      "name": "Jinha Kim",
+      "created": "2025-06-16T03:22:55.687027",
+      "sample_count": 4,
+      "last_updated": "2025-06-16T04:03:31.049899"
+    },
+    "83357226a4317fee": {
+      "name": "Jason C",
+      "created": "2025-06-16T04:03:31.856060",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:31.934535"
+    },
+    "f84f25fac8c7349d": {
+      "name": "Advith Kota",
+      "created": "2025-06-16T04:03:31.984424",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:32.061426"
+    },
+    "fecfee89459a4d62": {
+      "name": "Vinay Singamsetty",
+      "created": "2025-06-16T04:03:32.117746",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:32.216917"
+    },
+    "d858cbb11cc8c771": {
+      "name": "Olivia Kim",
+      "created": "2025-06-16T04:03:32.304786",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:32.401467"
+    },
+    "3637b1e3019cae3e": {
+      "name": "Speaker_15",
+      "created": "2025-06-16T04:03:32.454617",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:32.539997"
+    },
+    "68b786e47e5d2394": {
+      "name": "Raymund Thongthipaya",
+      "created": "2025-06-16T04:03:32.588257",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:32.666315"
+    },
+    "91a3fd0776d46f1e": {
+      "name": "Arun Vinayagam",
+      "created": "2025-06-16T04:03:32.714522",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:32.828826"
+    },
+    "3166227cc1526615": {
+      "name": "Amogh Dattatri",
+      "created": "2025-06-16T04:03:32.901869",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:32.979926"
+    },
+    "6b1422fa5a96577f": {
+      "name": "Alex Dav",
+      "created": "2025-06-16T04:03:33.030027",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:33.107994"
+    },
+    "aee9b41451a4997a": {
+      "name": "Alexander Skula",
+      "created": "2025-06-16T04:03:33.206405",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:33.312268"
+    },
+    "7bf70f49aa90616a": {
+      "name": "Archit Deepak",
+      "created": "2025-06-16T04:03:33.362763",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:33.440354"
+    },
+    "a748fffe10f327cc": {
+      "name": "Justin Zhang",
+      "created": "2025-06-16T04:03:33.491214",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:33.592141"
+    },
+    "81df2a960cca2e56": {
+      "name": "Kaiden Simon",
+      "created": "2025-06-16T04:03:33.650073",
+      "sample_count": 1
+    },
+    "6722aca70613ee06": {
+      "name": "Kacem Ettahali",
+      "created": "2025-06-16T04:03:33.682358",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:33.762600"
+    },
+    "0d2642284c8b4b55": {
+      "name": "Taher Merchant",
+      "created": "2025-06-16T04:03:33.811364",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:33.891026"
+    },
+    "95a3bccb95c2f190": {
+      "name": "Aarin Sandilya",
+      "created": "2025-06-16T04:03:33.965947",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:34.086280"
+    },
+    "5eb9772d58469b02": {
+      "name": "Riley Oh",
+      "created": "2025-06-16T04:03:34.142896",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:34.222674"
+    },
+    "4b19be094a9a150e": {
+      "name": "Saathvik Kannan",
+      "created": "2025-06-16T04:03:34.273545",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:34.406614"
+    },
+    "70b6f90b914903f9": {
+      "name": "Sadhika Kamchetty",
+      "created": "2025-06-16T04:03:34.457352",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:34.538355"
+    },
+    "e5aec1ac063a3652": {
+      "name": "Alexander Skula",
+      "created": "2025-06-16T04:03:34.589151",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:34.707726"
+    },
+    "a1ca1ba57ac274ad": {
+      "name": "Sarah Mokhtar",
+      "created": "2025-06-16T04:03:34.765364",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:34.861934"
+    },
+    "29f50f06a195ac58": {
+      "name": "Joshua Wu",
+      "created": "2025-06-16T04:03:34.911784",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:34.997544"
+    },
+    "89260194dbc49ce6": {
+      "name": "Lauren Pearson",
+      "created": "2025-06-16T04:03:35.047923",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:35.170893"
+    },
+    "14ab66206043d7ca": {
+      "name": "Judy Bai",
+      "created": "2025-06-16T04:03:35.290018",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:35.433064"
+    },
+    "02a6a93cf9108288": {
+      "name": "Advaith Avadhanam",
+      "created": "2025-06-16T04:03:35.485519",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:35.566113"
+    },
+    "81b768687a2483fa": {
+      "name": "Manolis Kellis",
+      "created": "2025-06-16T04:03:35.620073",
+      "sample_count": 1
+    },
+    "6590aac6a4a738c9": {
+      "name": "Manolis Kellis",
+      "created": "2025-06-16T04:03:35.647399",
+      "sample_count": 43,
+      "last_updated": "2025-06-16T04:03:35.732982"
+    },
+    "9329b8c37cbeac73": {
+      "name": "Ali Saif",
+      "created": "2025-06-16T04:03:35.783632",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:35.865695"
+    },
+    "a83cb6e47a9bbf64": {
+      "name": "Soham Samanta",
+      "created": "2025-06-16T04:03:35.933193",
+      "sample_count": 5,
+      "last_updated": "2025-06-16T04:03:36.070934"
+    }
+  },
+  "aliases": {},
+  "stats": {
+    "total_speakers": 36,
+    "total_embeddings": 287,
+    "last_updated": "2025-06-16T04:10:02.270065"
+  },
+  "version": "2.0"
+}

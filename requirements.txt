@@ -1,0 +1,45 @@
+# File: requirements.txt
+# installation steps:
+# pip install --no-cache-dir -r requirements.txt
+# pip install ctranslate2==4.5.0
+
+# Transcription
+--index-url https://download.pytorch.org/whl/nightly/cu128
+torch==2.8.0.dev20250523+cu128
+torchaudio==2.6.0.dev20250524+cu128
+torchvision==0.22.0.dev20250524+cu128
+
+# ctranslate2 == 4.5.0
+--extra-index-url https://pypi.org/simple
+whisperx==3.3.4
+python_dotenv==1.1.0
+httpx==0.27.2
+# Core dependencies
+pandas==2.2.3
+openpyxl==3.1.5
+
+# NLP and ML
+openai==1.35.0
+scikit-learn==1.5.0
+
+# Audio processing
+librosa==0.10.2
+pydub==0.25.1
+
+# Web framework (for later)
+flask==3.0.3
+requests==2.32.0
+
+# Utilities
+beautifulsoup4==4.12.3
+tqdm==4.66.0
+
+# ===== SPEAKER RECOGNITION DEPENDENCIES =====
+# Speaker embeddings
+speechbrain == 1.0.3
+# Vector database for speaker fingerprints
+chromadb == 1.0.12
+# Additional processing
+scipy ==1.15.3
+# CLI enhancements  
+tabulate == 0.9.0
