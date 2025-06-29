@@ -5,9 +5,13 @@
 
 # Transcription
 --index-url https://download.pytorch.org/whl/nightly/cu128
-torch==2.8.0.dev20250523+cu128
-torchaudio==2.6.0.dev20250524+cu128
-torchvision==0.22.0.dev20250524+cu128
+torch>=2.7.0
+torchaudio>=2.7.0
+torchvision>=0.22.0
+
+# Screenshots 
+cairosvg==2.8.2
+playwright==1.52.0
 
 # ctranslate2 == 4.5.0
 --extra-index-url https://pypi.org/simple

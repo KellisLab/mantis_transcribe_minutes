@@ -168,3 +168,130 @@ class PanoptoProcessor(BaseProcessor):
         except Exception as e:
             print(f"Error downloading transcript: {e}")
             return None
+
+    def capture_screenshot(
+        self, 
+        video_id: str, 
+        timestamp_seconds: int, 
+        # Default crop to capture the main video area (black region)
+        # Format: (width, height, x_offset, y_offset)
+        crop: tuple = (1440, 905, 670, 0),  # Adjusted to better fit the black region
+        timeout_sec: int = 40,
+        max_retries: int = 3,
+        viewport_size: dict = {"width": 1920, "height": 1080},
+    ) -> Optional[bytes]:
+        """
+        Capture a screenshot from a Panopto video at the specified timestamp using a headless browser.
+        Includes cropping functionality to only capture the video area
+        
+        Args:
+            video_id: Panopto video ID
+            timestamp_seconds: Timestamp in seconds
+            crop: Tuple of (width, height, x_offset, y_offset) for the crop filter.
+                If width or height is 0, the full width/height will be used.
+                Example: (1280, 720, 100, 50) will crop to 1280x720 starting at (100, 50)
+            timeout_sec: Timeout in seconds for browser operations
+            max_retries: Maximum number of retry attempts
+            viewport_size: Browser viewport size
+
+        Returns:
+            bytes: PNG image data or None if capture fails
+        """
+        from playwright.sync_api import sync_playwright
+        from PIL import Image
+        import io
+        import time
+
+        url = (
+            self.base_url + "/Panopto/Pages/Viewer.aspx"
+            f"?id={video_id}&start={timestamp_seconds}"
+        )
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                with sync_playwright() as pw:
+                    # Launch browser
+                    browser = pw.chromium.launch(
+                        channel="chrome",
+                        headless=True,
+                        args=["--no-sandbox", "--disable-gpu", "--disable-blink-features=AutomationControlled"]
+                    )
+
+                    # Create context and page with specified viewport
+                    context = browser.new_context(viewport=viewport_size)
+                    page = context.new_page()
+                    page.set_default_timeout(timeout_sec * 1000)
+                    
+                    # Hide WebDriver
+                    page.add_init_script(
+                        "Object.defineProperty(navigator, 'webdriver', {get:() => undefined});"
+                    )
+
+                    # Navigate to video
+                    page.goto(url, wait_until="domcontentloaded")
+                    page.wait_for_load_state("networkidle")
+
+                    # Wait for video to be ready
+                    page.wait_for_function("""
+                    () => {
+                        const v = document.getElementById('secondaryVideo');
+                        return v && v.readyState >= 3;
+                    }
+                    """, timeout=timeout_sec * 1000)
+
+                    # Click play button
+                    page.wait_for_selector('#playButton', timeout=timeout_sec * 1000)
+                    page.click('#playButton')
+
+                    # Wait for video elements
+                    page.wait_for_selector("video#primaryVideo", state="attached", timeout=timeout_sec * 1000)
+                    page.wait_for_selector("video#secondaryVideo", state="attached", timeout=timeout_sec * 1000)
+
+                    # Seek to exact timestamp
+                    page.wait_for_function("""
+                        async (targetTime) => {
+                            const video = document.getElementById('secondaryVideo');
+                            if (!video) return false;
+                            
+                            if (video.readyState < 3) return false;
+                            
+                            video.currentTime = targetTime;
+                            await new Promise(r => setTimeout(r, 100));
+                            video.play();
+                            video.pause();
+                            return Math.abs(video.currentTime - targetTime) < 0.1;
+                        }
+                    """, arg=timestamp_seconds, timeout=timeout_sec * 1000)
+
+                    # Take screenshot
+                    png_bytes = page.screenshot(full_page=True)
+                    browser.close()
+
+                    # Process image with crop and resize
+                    with Image.open(io.BytesIO(png_bytes)) as img:
+                        # Apply crop if specified
+                        crop_w, crop_h, crop_x, crop_y = crop
+                        if crop_w > 0 and crop_h > 0:
+                            # Ensure crop dimensions are within image bounds
+                            img_width, img_height = img.size
+                            right = min(crop_x + crop_w, img_width)
+                            bottom = min(crop_y + crop_h, img_height)
+                            left = min(crop_x, img_width - 1)
+                            top = min(crop_y, img_height - 1)
+                            
+                            # Only crop if the crop area is valid
+                            if right > left and bottom > top:
+                                img = img.crop((left, top, right, bottom))
+                        
+                        # Convert back to bytes
+                        output = io.BytesIO()
+                        img.save(output, format='PNG')
+                        return output.getvalue()
+
+            except Exception as e:
+                print(f"Attempt {attempt} failed: {e}")
+                if attempt == max_retries:
+                    return None
+                time.sleep(2 ** attempt)
+        
+        return None

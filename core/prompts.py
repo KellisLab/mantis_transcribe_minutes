@@ -79,7 +79,66 @@ Requirements:
 4. Only include explicitly stated items
 
 Transcript:
-{transcript}'''
+{transcript}''',
+        
+        "SYSTEM_SCREENSHOT": """You are a helpful assistant that analyzes meeting transcripts and identifies the most important moments for screenshots.
+        Focus on key moments that visually represent the main discussion points.
+        You will be shown screenshots from a meeting along with their timestamps and context.
+        Your task is to select the most representative screenshots that best capture the key moments of the discussion.
+        For each selected screenshot, provide a brief caption for each screenshot.
+        """,
+        
+        "SPEAKER_SCREENSHOT_CANDIDATES": """Analyze the following meeting transcript from {speaker} and identify the 5 most important timestamps given the provided time stamps 
+        that could potentially best capture the key moments of the discussion, especially where there will be visual cues or demonstrations. 
+        
+        Topic: {topic_title}
+        Summary: {topic_content}
+        
+        Transcript:
+        {transcript}
+        
+        For each timestamp, provide a brief justification for why it's important.
+        
+        Return a JSON object with the following structure:
+        {{
+            "candidates": [
+                {{
+                    "timestamp": 123.45,
+                    "justification": "Brief description of why this moment is important for a screenshot",
+                }}
+            ]
+        }}
+        """,
+        
+        "SCREENSHOT_SELECTION": """Analyze the following meeting topic and select the most relevant screenshots.
+        
+        **Topic:** {topic_title}
+        **Summary:** {topic_content}
+        
+        **Instructions:**
+        1. Review each screenshot and its timestamp
+        2. Select up to three screenshots that best represent the key moments of this discussion (if there are none that are key moments or only show the speakers without other visual cues, return an empty array)
+        3. Consider visual clarity, relevance to the topic, and importance of the moment
+        4. Return your selection as a JSON object with the selected indices and reasoning
+        5. Given the selected indices and corresponding images, provide for each corresponding index 
+         an accurate and a meaningful description, which will be used as a caption  (This must be very high quality and very professional)
+        6. Each description of the image should utilize both the image and the context provided in the summary to generate a meaningful caption 
+        
+       Return a JSON object with the following structure:
+       {{
+            "selected_indices": [number, ...],  // Array of 1-3 integers representing the indices of selected screenshots
+            "reasoning": "string",              // Explanation for why these screenshots were selected
+            "caption": ["string", ...]             // Array of captions that corresponds to each selected screenshots from left to right in the array
+       }}
+
+
+       Example Response: 
+       {{
+            "selected_indices": [0, 2],
+            "reasoning": "Screenshot 0 shows the main discussion point clearly, while screenshot 2 captures an important visual demonstration."
+            "caption": ["A visual demonstration of the Mantis embedding space.", "A visual demonstration of the Mantis embedding saoce."]
+        }}
+        """
     }
     
     def __init__(self, custom_prompts_file: Optional[Path] = None):

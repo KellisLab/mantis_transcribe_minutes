@@ -44,9 +44,17 @@ A comprehensive Python-based platform for processing meeting recordings, transcr
 
 - **Rich Output Formats**
   - Time-synced transcripts with speaker labels
-  - Interactive HTML summaries with video links
+  - Interactive HTML summaries with video links and embedded screenshots
   - Color-coded Excel files with speaker analytics
   - Detailed speaker participation metrics
+  - AI-selected screenshots for key discussion points
+
+- **Smart Screenshot Integration**
+  - Automatic screenshot capture from video at key moments
+  - AI-powered selection of most relevant screenshots using GPT-4
+  - In-memory processing of screenshots (no disk I/O)
+  - Responsive image display in HTML and Markdown outputs
+  - Navigation links to jump between speakers, topics, and screenshots
 
 ## System Architecture
 
@@ -87,8 +95,64 @@ A comprehensive Python-based platform for processing meeting recordings, transcr
 │  - NLP timestamp refinement                                 │
 │  - AI summarization (OpenAI GPT-4)                         │
 │  - HTML/Markdown generation                                 │
+│  - Screenshot processing and AI selection                   │
+└─────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                Screenshot Processing                        │
+│  - Timestamp-based capture                                 │
+│  - AI-powered selection of key moments                     │
+│  - Automatic caption generation                            │
+│  - Responsive embedding in outputs                         │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+## Screenshot Features
+
+### AI-Powered Screenshot Selection
+Our system intelligently selects the most relevant screenshots from your meeting recordings using GPT-4:
+
+1. **Automatic Timestamp Selection**
+   - Identifies key discussion points
+   - Captures visual demonstrations
+   - Selects moments with screen sharing or presentations
+
+2. **Smart Captioning**
+   - Generates descriptive captions using AI
+   - Includes timestamps and context
+   - Highlights key elements in each screenshot
+
+3. **Seamless Integration**
+   - Embeds screenshots directly in HTML and Markdown outputs
+   - Links screenshots to corresponding timestamps
+   - Responsive design for all devices
+
+### Usage Examples
+
+```bash
+# Process Panopto video with screenshots
+python cli.py --panopto-id VIDEO_ID --use-screenshots
+```
+
+### Output Examples
+
+#### HTML Output
+- Interactive gallery view
+- Click to expand full-size images
+- Navigation between related screenshots
+- Timestamp links to jump to video positions
+
+#### Markdown Output
+- Clean, readable format
+- Thumbnail previews
+- Direct links to full-size images
+- Compatible with most Markdown viewers
+
+### Best Practices
+1. **For Long Meetings**: Let the AI select the most relevant moments automatically
+2. **For Slide Decks**: Ensure good contrast and readable text in your slides
+3. **For Code Sharing**: Use large fonts and proper syntax highlighting
 
 ## Requirements
 
@@ -182,21 +246,22 @@ Orchestrates the entire workflow, routing inputs to appropriate processors.
 - Converts between formats (VTT → TXT → XLSX)
 - Applies NLP-based timestamp refinement
 - Generates AI summaries and HTML outputs
+- Processes and embeds screenshots
 
 ## Usage Guide
 
 ### Basic Processing
 
-#### Process Video/Audio Files
+#### Process Video/Audio Files with Screenshots
 ```bash
-# Default: with speaker recognition
-python cli.py recording.mp4
+# Enable screenshot generation (requires video input)
+python cli.py recording.mp4 --use-screenshots
 
-# Without speaker recognition (faster)
-python cli.py recording.mp4 --no-speaker-recognition
+# With custom screenshot selection (1-5 screenshots per topic)
+python cli.py recording.mp4 --use-screenshots --max-screenshots 3
 
-# Custom output directory
-python cli.py recording.mp4 --output ./my_transcripts/
+# Process Panopto video with screenshots
+python cli.py --panopto-id ABC123 --use-screenshots
 ```
 
 #### Process Subtitle Files
@@ -296,6 +361,30 @@ def __init__(self, ..., similarity_threshold: float = 0.85):
     # Higher values: stricter matching
 ```
 
+#### Screenshot Options
+- `--use-screenshots`: Enable screenshot generation (default: False)
+- `--max-screenshots N`: Maximum screenshots per topic (1-5, default: 3)
+- `--screenshot-quality Q`: Image quality (1-100, default: 85)
+- `--screenshot-width W`: Width in pixels (default: 1280, maintains aspect ratio)
+
+### Output Formats
+
+#### HTML Output with Screenshots
+The HTML output now includes:
+- Fixed navigation sidebar with speaker/topic links
+- Embedded screenshots under each topic
+- Clickable thumbnails that expand to full size
+- Timestamp links to jump to video positions
+- Responsive design for all devices
+
+#### Markdown Output with Screenshots
+The Markdown output includes:
+- Table of contents with anchor links
+- Screenshots displayed in a 2-column grid
+- Clickable image thumbnails
+- Back-to-top navigation
+- Compatible with most Markdown viewers
+
 ## Technical Details
 
 ### Speaker Embedding Architecture
@@ -318,6 +407,13 @@ The system uses **ECAPA-TDNN** (Emphasized Channel Attention, Propagation and Ag
 3. **Speaker Attribution**: Map diarization results to transcript segments
 4. **Topic Detection**: Identify topic changes using TF-IDF
 5. **AI Summarization**: Generate hierarchical summaries with GPT-4
+
+### Screenshot Selection
+Screenshots are selected using AI based on:
+1. Visual relevance to the discussion topic
+2. Content clarity and readability
+3. Diversity of visual information
+4. Timestamp distribution throughout the topic
 
 ## API Reference
 

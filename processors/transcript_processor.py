@@ -29,6 +29,10 @@ from core.prompts import PromptManager
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 
+import io 
+from PIL import Image 
+import base64
+
 # For NLP and refinement
 try:
     import nltk
@@ -99,6 +103,9 @@ class TranscriptProcessor(BaseProcessor):
                     xlsx_file = refined_xlsx
             else:
                 print("Step 3: Skipping timestamp refinement...")
+
+            # TODO This refinement to the xlms is not passed into self.xlsx_to_html_full 
+            # and _generate_speaker_summaries_data redundantly does detetct_speaker_topics again
             
             # Step 4: Generate HTML and summaries with all features
             print("Step 4: Generating HTML and summaries...")
@@ -388,7 +395,9 @@ class TranscriptProcessor(BaseProcessor):
             
             # Detect topic changes for each speaker
             speaker_topics = self._detect_speaker_topics(transcript_entries)
-            
+            # for each speaker maintain list of topics 
+            # for each topic it adds all of the speaker's text and also all of the indices 
+
             # Update DataFrame with topic information
             for speaker, topics in speaker_topics.items():
                 for topic_num, topic in enumerate(topics, 1):
@@ -430,15 +439,23 @@ class TranscriptProcessor(BaseProcessor):
         
         # Check if we should use enhanced summaries
         use_enhanced = kwargs.get('use_enhanced_summaries', True)
+        use_screenshots = kwargs.get('use_screenshots', True)
         
         if use_enhanced and OPENAI_AVAILABLE and self.api_key:
             print("  Using enhanced speaker summaries with multiple topics...")
             
             # Generate enhanced summaries data
             summaries_data = self._generate_speaker_summaries_data(transcript_data)
+            screenshots_added_data = None # will add screenshots to each summaries 
+
+            if use_screenshots:
+                # Generate screenshots with AI and add to each topic 
+                screenshots_added_data = self._generate_screenshots_with_speaker_summaries_data(transcript_data, video_id, summaries_data)
             
-            # Generate enhanced HTML
-            speaker_html = self._generate_enhanced_speaker_html(transcript_data, video_id, summaries_data, metadata)
+            # Generate enhanced HTML 
+            # if screenshots_data is None will use summaries_data and otherwise use screenshots_added_data
+            speaker_html = self._generate_enhanced_speaker_html(transcript_data, video_id, summaries_data, metadata, screenshots_added_data)
+                
             meeting_name = metadata.get('meeting_name', xlsx_file.stem) if metadata else xlsx_file.stem
             speaker_html_file = self.output_dir / f"{meeting_name}_speaker_summaries.html"
             with open(speaker_html_file, 'w', encoding='utf-8') as f:
@@ -446,11 +463,13 @@ class TranscriptProcessor(BaseProcessor):
             files['speaker_html'] = str(speaker_html_file)
             
             # Generate enhanced markdown
-            speaker_md = self._generate_enhanced_speaker_markdown(transcript_data, video_id, summaries_data, metadata)
+            # if screenshots_data is None will use summaries_data and otherwise use screenshots_added_data
+            speaker_md = self._generate_enhanced_speaker_markdown(transcript_data, video_id, summaries_data, metadata, screenshots_added_data)
             speaker_md_file = self.output_dir / f"{meeting_name}_speaker_summaries.md"
             with open(speaker_md_file, 'w', encoding='utf-8') as f:
                 f.write(speaker_md)
             files['speaker_md'] = str(speaker_md_file)
+
         else:
             # Generate basic speaker links
             speaker_html = self._generate_basic_speaker_html(df, video_id)
@@ -631,107 +650,560 @@ class TranscriptProcessor(BaseProcessor):
                     }
         
         return topic_data
-    
-    def _generate_enhanced_speaker_html(self, transcript_data: List[Dict], video_id: Optional[str], 
-                                            summaries_data: Dict[str, List[Dict]], metadata: Dict = None) -> str:
-        """Generate enhanced HTML with speaker summaries and proper title."""
-        html_content = '<!DOCTYPE html>\n<html>\n<head>\n<title>Speaker Summaries</title>\n'
-        html_content += '<style>\n'
-        html_content += 'body { font-family: Arial, sans-serif; margin: 20px; font-size: 11pt; }\n'
-        html_content += 'h1 { font-family: Cambria, serif; font-size: 11pt; color: #c0504d; text-decoration: underline; margin-bottom: 0px; display: inline-block; }\n'
-        html_content += 'h1 a { color: #c0504d; text-decoration: underline; }\n'
-        html_content += '.speaker { font-weight: bold; color: #7030a0; text-decoration: underline; margin-bottom: 3px; }\n'
-        html_content += '.topic { margin-left: 0px; margin-bottom: 3px; }\n'
-        html_content += '.topic-title { font-weight: bold; color: #1f497d; text-decoration: underline; }\n'
-        html_content += 'ol { list-style-position: outside; padding-left: 12px; margin-top: 0px; }\n'
-        html_content += 'ol li { margin-bottom: 0px; }\n'
-        html_content += 'a { color: inherit; text-decoration: none; }\n'
-        html_content += '.timestamp { color: #1155cc; }\n'
-        html_content += "b { font-weight: bold; }\n"
-        html_content += '</style>\n</head>\n<body>\n'
+
+    def _generate_screenshots_with_speaker_summaries_data(self, transcript_data: List[Dict], video_id: Optional[str], 
+                                            summaries_data: Dict[str, List[Dict]]) -> Dict[str, List[Dict]]:
+        """Generate screenshots with AI and using output speaker summaries data."""
+        if not OPENAI_AVAILABLE or not self.api_key or not video_id:
+            print("OpenAI not available, skipping screenshot generation.")
+            return None 
+
+        from openai import OpenAI
+        client = OpenAI(api_key=self.api_key)
+
+        # make a copy of summaries_data to avoid modifying the original data
+        summaries_data_copy = summaries_data.copy()
         
+        # Initialize Panopto processor for screenshots
+        from processors.panopto_processor import PanoptoProcessor
+        panopto_processor = PanoptoProcessor(self.output_dir)
+        
+        for speaker, topics in summaries_data_copy.items():
+            for i, topic in enumerate(topics, 1):
+                indices = topic['indices']
+                topic_text = '\n\n'.join([
+                    f"{transcript_data[idx]['time_str']}: {transcript_data[idx]['text']}" 
+                    for idx in indices
+                ])
+                
+                # Step 1: Get screenshot candidates using LLM
+                try:
+                    # Get screenshot candidates prompt
+                    prompt = self.prompt_manager.get_prompt(
+                        "SPEAKER_SCREENSHOT_CANDIDATES",
+                        speaker=speaker,
+                        topic_num=i,
+                        topic_title=topic.get('summary', {}).get('title', f'Topic {i}'),
+                        topic_content=topic.get('summary', {}).get('content', ''),
+                        transcript=topic_text
+                    )
+                    
+                    system_prompt = self.prompt_manager.get_prompt("SYSTEM_SCREENSHOT")
+                    
+                    response = client.chat.completions.create(
+                        model=self.gpt_model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": prompt}
+                        ],
+                        response_format={"type": "json_object"},
+                        max_tokens=800,
+                    )
+                    
+                    # Parse the response to get timestamps
+                    result = json.loads(response.choices[0].message.content)
+                    candidate_timestamps = result.get('candidates', [])
+                    
+                    if not candidate_timestamps:
+                        continue
+                        
+                    # Step 2: Capture screenshots for each candidate
+                    screenshots = []
+                    for i, ts in enumerate(candidate_timestamps[:5]):  # Limit to first 5 candidates
+                        try:
+                            print(f"Attempting to capture screenshot - Video ID: {video_id}, Timestamp information : {ts}")
+                            screenshot_data = panopto_processor.capture_screenshot(video_id, ts['timestamp'])
+                            if screenshot_data:
+                                # Convert to base64 for direct embedding
+                                img_str = base64.b64encode(screenshot_data).decode('utf-8')
+                                screenshots.append({
+                                    'timestamp': ts['timestamp'],
+                                    'time_str': self._seconds_to_time_str(int(ts['timestamp'])),
+                                    'data': screenshot_data,  # Raw image data
+                                    'data_url': f"data:image/jpeg;base64,{img_str}",  # Base64 encoded
+                                })
+                        except Exception as e:
+                            print(f"Error capturing screenshot at {ts['timestamp']}s: {e}")
+                    
+                    # Step 3: If we have screenshots, let the LLM pick the best ones
+                    if screenshots:
+                        selected_screenshots = self._select_best_screenshots(screenshots, topic)
+                        # only when there are selected screenshots 
+                        if selected_screenshots:
+                            # Only keep the selected screenshots in the topic
+                            topic['screenshots'] = [{
+                                'timestamp': ss['timestamp'],
+                                'time_str': ss['time_str'],
+                                'data_url': ss['data_url'],  # Already in base64 format
+                                'caption': ss['caption']
+                            } for ss in selected_screenshots]
+                        
+                except Exception as e:
+                    print(f"Error generating screenshot candidates for {speaker} topic {i}: {e}")
+                    return None 
+        return summaries_data_copy
+
+    def _select_best_screenshots(self, screenshots: List[Dict], topic: Dict) -> List[Dict]:
+        """Select the best screenshots using LLM."""
+            
+        try:
+            # create copy of screenshots to avoid modifying the original list
+            screenshots_copy = screenshots.copy()
+            from openai import OpenAI
+
+            client = OpenAI(api_key=self.api_key)
+            
+            messages = [
+                {"role": "system", "content": self.prompt_manager.get_prompt("SYSTEM_SCREENSHOT")},
+                {"role": "user", "content": self.prompt_manager.get_prompt(
+                    "SCREENSHOT_SELECTION",
+                    topic_title=topic.get('summary', {}).get('title', 'Topic'),
+                    topic_content=topic.get('summary', {}).get('content', '')
+                )}
+            ]
+            
+            valid_screenshots = []
+
+            if len(screenshots_copy) > 5:
+                screenshots_copy = screenshots_copy[:5]
+                print(f"Warning: {len(screenshots_copy)} screenshots provided, limiting to 5.")
+            
+            # Process each screenshot
+            for idx, ss in enumerate(screenshots_copy): # MAX 5 screenshots
+                try:
+                    if not ss.get('data'):
+                        print(f"Warning: No image data for screenshot {idx}")
+                        continue
+                    
+                    # Try to process as image
+                    try:
+                        img_data = ss['data']
+                        
+                        # Try to detect if it's SVG
+                        is_svg = (img_data.startswith(b'<?xml') or 
+                                b'<svg' in img_data[:1000].lower() or
+                                b'svg' in img_data[:100].lower())
+                        
+                        if is_svg:
+                            # Try to convert SVG to PNG
+                            try:
+                                import cairosvg
+                                png_data = cairosvg.svg2png(bytestring=img_data)
+                                with open(f"{debug_path}.png", 'wb') as f:
+                                    f.write(png_data)
+                                img = Image.open(io.BytesIO(png_data))
+                            except Exception as e:
+                                print(f"SVG conversion failed for screenshot {idx}: {e}")
+                                # Try loading as image anyway
+                                img = Image.open(io.BytesIO(img_data))
+                        else:
+                            # Try loading as regular image
+                            img = Image.open(io.BytesIO(img_data))
+                        
+                        # Process the image
+                        if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                            background = Image.new('RGB', img.size, (255, 255, 255))
+                            background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                            img = background
+                        
+                        # Create thumbnail
+                        img.thumbnail((512, 512))
+                        buffered = io.BytesIO()
+                        img.save(buffered, format="JPEG", quality=85)
+                        jpeg_data = buffered.getvalue()
+                        
+                        # Only add to messages if we have valid image data
+                        if len(jpeg_data) > 1000:  # Ensure we have a reasonable amount of data
+                            valid_screenshots.append({
+                                'jpeg_data': jpeg_data, # resized JPEG to 512x512
+                                'time_str': ss.get('time_str', '00:00:00'),
+                                'timestamp': ss.get('timestamp', 0), 
+                                'idx': idx, # store the idx from the original screenshots list
+                            })
+
+                        else:
+                            print(f"Warning: Invalid JPEG data for screenshot {idx}")
+                            
+                    except Exception as img_error:
+                        print(f"Error processing image {idx}: {img_error}")
+                        continue
+                        
+                except Exception as e:
+                    print(f"Error with screenshot {idx}: {e}")
+                    continue
+            
+            # If we have valid screenshots, send them to the LLM
+            if valid_screenshots:
+                for vs in valid_screenshots:
+                    messages.append({
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": f"Screenshot at {vs['time_str']} (Timestamp: {vs['timestamp']:.1f}s)"},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64.b64encode(vs['jpeg_data']).decode('utf-8')}"
+                                }
+                            }
+                        ]
+                    })
+                
+                try:
+                    # Call the API
+                    response = client.chat.completions.create(
+                        model=self.gpt_model,
+                        messages=messages,
+                        temperature=0.2,
+                        max_tokens=500,
+                        response_format={"type": "json_object"}
+                    )
+                    
+                    # Parse response
+                    result = json.loads(response.choices[0].message.content)
+                    print(f"LLM Response: {result}")
+                    selected_indices = result.get('selected_indices', [])
+                    selected_indice_descriptions = result.get('caption', [])
+                    print(f"Selected Indices: {selected_indices}")
+                    print(f"Selected Descriptions: {selected_indice_descriptions}")
+
+                    if len(selected_indices) != len(selected_indice_descriptions):
+                        print("Warning: Mismatch between selected indices and descriptions")
+                        return []
+                    
+                    if not selected_indices:
+                        print("No selections made by LLM.")
+                        return []
+
+                    if len(selected_indices) > 3:
+                        print("Warning: More than 3 screenshots selected by LLM. Limiting to 3.")
+                        selected_indices = selected_indices[:3]
+                    
+                    # Return selected screenshots
+                    selected_screenshots = [] 
+                    for i in range(len(selected_indices)):  # Max 3 screenshots
+                        # each index of selected_indices and of selected_indice_descriptions are of the same screenshot (e.g. [0, 2, 3] and [description_0, description_2, description_3])
+                        valid_screenshots_index = selected_indices[i]
+                        description = selected_indice_descriptions[i]
+
+                        if 0 <= valid_screenshots_index < len(valid_screenshots):
+                            screenshot_index = valid_screenshots[valid_screenshots_index]['idx'] # get the original index for the screenshots list 
+                            screenshots_copy[screenshot_index]['caption'] = description # modify copy of screenshots to add explanation field 
+                            selected_screenshots.append(screenshots_copy[screenshot_index])
+
+                    return selected_screenshots 
+                    
+                except Exception as api_error:
+                    print(f"Error calling LLM API: {api_error}")
+            
+            # If we get here, something went wrong - return first 3 screenshots
+            return []
+                
+        except Exception as e:
+            print(f"Error in LLM screenshot selection: {e}")
+            return []  # Fallback to first 3 screenshots
+
+    def _generate_enhanced_speaker_html(
+        self,
+        transcript_data: List[Dict],
+        video_id: Optional[str],
+        summaries_data: Dict[str, List[Dict]],
+        metadata: Dict = None,
+        screenshots_data: Optional[Dict[str, List[Dict]]] = None
+    ) -> str:
+        """Generate enhanced HTML with speaker summaries, screenshots, and navigation."""
+        html_content = '''<!DOCTYPE html>
+    <html>
+    <head>
+        <title>Speaker Summaries</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; font-size: 11pt; line-height: 1.5; }
+            h1 { font-family: Cambria, serif; font-size: 14pt; color: #c0504d; text-decoration: underline; margin: 20px 0 10px; }
+            h2 { font-family: Cambria, serif; font-size: 12pt; color: #1f497d; margin: 15px 0 5px; border-bottom: 1px solid #eee; padding-bottom: 3px; }
+            .speaker { 
+                font-weight: bold; 
+                color: #7030a0; 
+                background-color: #f8f8f8;
+                padding: 5px 10px;
+                border-radius: 4px;
+                margin: 10px 0;
+                display: inline-block;
+            }
+            .topic { 
+                margin: 10px 0 15px 20px; 
+                padding: 10px;
+                background-color: #f9f9f9;
+                border-left: 3px solid #7030a0;
+            }
+            .topic-title { 
+                font-weight: bold; 
+                color: #1f497d; 
+            }
+            .timestamp { 
+                color: #1155cc; 
+                font-size: 0.9em;
+                margin-left: 5px;
+            }
+            .screenshots {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+                margin: 10px 0;
+            }
+            .screenshot {
+                max-width: 300px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                padding: 5px;
+            }
+            .screenshot img {
+                max-width: 100%;
+                height: auto;
+                display: block;
+            }
+            .screenshot-caption {
+                font-size: 0.8em;
+                color: #666;
+                text-align: center;
+                margin-top: 5px;
+            }
+            .nav-links {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: white;
+                padding: 10px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            }
+            .nav-links a {
+                display: block;
+                margin: 5px 0;
+                color: #1155cc;
+                text-decoration: none;
+            }
+            .nav-links a:hover {
+                text-decoration: underline;
+            }
+            .content {
+                max-width: 900px;
+                margin: 0 auto;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="content">
+            <!-- Navigation Links -->
+            <div class="nav-links">
+                <strong>Jump to:</strong>
+                <a href="#top">Top</a>
+            </div>
+    '''
+
         # Add title with meeting name
         meeting_name = metadata.get('meeting_name', 'Meeting') if metadata else 'Meeting'
         formatted_name = self._format_meeting_name(meeting_name)
 
-        # Add title
+        # Add title and navigation
+        html_content += f'<h1 id="top">{formatted_name}</h1>\n'
         if video_id:
             video_link = f'https://mit.hosted.panopto.com/Panopto/Pages/Viewer.aspx?id={video_id}'
-            html_content += f'<h1><a href="{video_link}">{formatted_name} <span style="color: #1155cc;">(link)</span></a></h1>\n'
-        else:
-            html_content += f'<h1>{formatted_name}</h1>\n'
-        
-        # Create an ordered list for speakers
-        html_content += '<ol>\n'
-        
+            html_content += f'<p><a href="{video_link}" target="_blank">🎥 Watch Video</a></p>\n'
+
+        final_data = screenshots_data if screenshots_data is not None else summaries_data
+
+        # Add speaker navigation
+        html_content += '<h2>Speakers</h2>\n<ul>\n'
+        for speaker in final_data.keys():
+            speaker_id = speaker.lower().replace(' ', '-')
+            html_content += f'    <li><a href="#{speaker_id}">{speaker}</a></li>\n'
+        html_content += '</ul>\n'
+
         # Process each speaker
-        for speaker_idx, (speaker, topics) in enumerate(summaries_data.items(), 1):
-            # Speaker name as a list item
-            html_content += f'<li><div class="speaker">{speaker}</div>\n'
-            
+        for speaker, topics in final_data.items():
+            speaker_id = speaker.lower().replace(' ', '-')
+            html_content += (
+                f'<h2 id="{speaker_id}">{speaker} '
+                f'<a href="#top" style="font-size: 0.8em; margin-left: 10px;">↑ Top</a></h2>\n'
+            )
+
+            # Add navigation to topics
+            if len(topics) > 1:
+                html_content += '<div style="margin-bottom: 15px;">\n'
+                for i, topic in enumerate(topics, 1):
+                    topic_title = topic.get('summary', {}).get('title', f'Topic {i}')
+                    short_title = (topic_title[:30] + '...') if len(topic_title) > 30 else topic_title
+                    html_content += (
+                        f'<a href="#{speaker_id}-{i}" '
+                        f'style="margin-right: 10px; font-size: 0.9em;">{i}. {short_title}</a>\n'
+                    )
+                html_content += '</div>\n'
+
             # Process each topic
             for i, topic in enumerate(topics, 1):
-                # Get the summary
                 topic_summary = topic.get('summary', {'title': f'Topic {i}', 'content': 'Summary not available'})
-                
-                # Format timestamp link
-                timestamp_seconds = topic['start_seconds']
-                timestamp_str = topic['start_time']
-                
+                timestamp_seconds = topic.get('start_seconds', 0)
+                timestamp_str = topic.get('start_time', '00:00')
+
+                html_content += f'<div class="topic" id="{speaker_id}-{i}">\n'
+                html_content += f'  <div class="topic-title">{i}. {topic_summary["title"]} '
                 if video_id:
-                    video_link = f'https://mit.hosted.panopto.com/Panopto/Pages/Viewer.aspx?id={video_id}&start={timestamp_seconds}'
-                    html_content += f'<div class="topic">(<span class="topic-title">{i}) {topic_summary["title"]}</span> '
-                    html_content += f'<a href="{video_link}"><span class="timestamp">({timestamp_str})</span></a>: '
-                    html_content += f'{topic_summary["content"]}</div>\n'
+                    video_link_ts = (
+                        f'https://mit.hosted.panopto.com/Panopto/Pages/Viewer.aspx'
+                        f'?id={video_id}&start={int(timestamp_seconds)}'
+                    )
+                    html_content += f'<a href="{video_link_ts}" class="timestamp" target="_blank">({timestamp_str})</a>'
                 else:
-                    html_content += f'<div class="topic">(<span class="topic-title">{i}) {topic_summary["title"]}</span> '
-                    html_content += f'<span class="timestamp">({timestamp_str})</span>: '
-                    html_content += f'{topic_summary["content"]}</div>\n'
-            
-            html_content += '</li>\n'
-        
-        html_content += '</ol>\n</body>\n</html>'
-        
+                    html_content += f'<span class="timestamp">({timestamp_str})</span>'
+                html_content += '</div>\n'
+
+                html_content += f'  <div class="topic-content">{topic_summary["content"]}</div>\n'
+
+                # Add screenshots if available
+                if screenshots_data and 'screenshots' in topic and topic['screenshots']:
+                    html_content += '  <div class="screenshots">\n'
+                    for ss in topic['screenshots']:
+                        html_content += f'''
+        <div class="screenshot">
+            <a href="{ss['data_url']}" target="_blank">
+                <img src="{ss['data_url']}" alt="Screenshot at {ss['time_str']}">
+            </a>
+            <div class="screenshot-caption">{ss['time_str']} - {ss['caption']}</div>
+        </div>
+    '''
+                    html_content += '  </div>\n'
+
+                html_content += '</div>\n'  # Close topic div
+                html_content += (
+                    '<div style="text-align: right; margin: 5px 0 20px;">'
+                    '<a href="#top">↑ Back to top</a></div>\n'
+                )
+
+        # Close content div and add script/html footers
+        html_content += '''    </div>
+        <script>
+            // Smooth scrolling for anchor links
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {
+                        target.scrollIntoView({ behavior: 'smooth' });
+                    }
+                });
+            });
+        </script>
+    </body>
+    </html>
+    '''
+
         return html_content
+
     
     def _generate_enhanced_speaker_markdown(self, transcript_data: List[Dict], video_id: Optional[str],
-                                               summaries_data: Dict[str, List[Dict]], metadata: Dict = None) -> str:
-        """Generate enhanced markdown with speaker summaries and proper title."""
+                                        summaries_data: Dict[str, List[Dict]], metadata: Dict = None, 
+                                        screenshots_data: Optional[Dict[str, List[Dict]]] = None) -> str:
+        """Generate enhanced markdown with speaker summaries, screenshots, and basic navigation.
+        
+        Args:
+            transcript_data: List of transcript entries
+            video_id: Optional video ID for creating video links
+            summaries_data: Dictionary containing speaker topics and summaries
+            metadata: Optional dictionary containing meeting metadata
+            screenshots_data: Optional dictionary containing screenshot data
+            
+        Returns:
+            Formatted markdown string
+        """
         md_lines = []
         
         # Add title with meeting name
         meeting_name = metadata.get('meeting_name', 'Meeting') if metadata else 'Meeting'
         formatted_name = self._format_meeting_name(meeting_name)
         
+        # Add title and video link
         if video_id:
             video_link = f"https://mit.hosted.panopto.com/Panopto/Pages/Viewer.aspx?id={video_id}"
-            md_lines.append(f"# [{formatted_name}]({video_link})\n")
+            md_lines.append(f"# [{formatted_name}]({video_link})")
         else:
-            md_lines.append(f"# {formatted_name}\n")
+            md_lines.append(f"# {formatted_name}")
+        
+        md_lines.append("")  # Empty line for readability
+        
+        final_data = screenshots_data if screenshots_data is not None else summaries_data
+        
+        # Add table of contents
+        md_lines.append("## Table of Contents")
+        for speaker in final_data.keys():
+            speaker_id = speaker.lower().replace(' ', '-')
+            md_lines.append(f"- [{speaker}](#{speaker_id})")
+        md_lines.append("")  # Empty line for readability
         
         # Process each speaker
-        for speaker, topics in summaries_data.items():
-            # Speaker name as header
-            md_lines.append(f"**{speaker}**")
+        for speaker, topics in final_data.items():
+            speaker_id = speaker.lower().replace(' ', '-')
+            
+            # Speaker header with anchor
+            md_lines.append(f"## <a id='{speaker_id}'></a>{speaker}")
+            md_lines.append("")  # Empty line for readability
+            
+            # Add topic navigation for this speaker
+            if len(topics) > 1:
+                md_lines.append("**Topics:**  ")
+                topic_links = []
+                for i, topic in enumerate(topics, 1):
+                    topic_title = topic.get('summary', {}).get('title', f'Topic {i}')
+                    topic_id = f"{speaker_id}-{i}"
+                    topic_links.append(f"[{i}. {topic_title[:20]}{'...' if len(topic_title) > 20 else ''}](#{topic_id})")
+                md_lines.append(" | ".join(topic_links))
+                md_lines.append("")  # Empty line for readability
             
             # Process each topic
             for i, topic in enumerate(topics, 1):
-                # Get the summary
                 topic_summary = topic.get('summary', {'title': f'Topic {i}', 'content': 'Summary not available'})
+                timestamp_seconds = topic.get('start_seconds', 0)
+                timestamp_str = topic.get('start_time', '00:00')
+                topic_id = f"{speaker_id}-{i}"
                 
-                # Format timestamp link
-                timestamp_seconds = topic['start_seconds']
-                timestamp_str = topic['start_time']
-                
+                # Topic title with timestamp
+                md_lines.append(f"### <a id='{topic_id}'></a>{i}. {topic_summary['title']}")
                 if video_id:
-                    video_link = f'https://mit.hosted.panopto.com/Panopto/Pages/Viewer.aspx?id={video_id}&start={timestamp_seconds}'
-                    md_lines.append(f"**({i}) {topic_summary['title']} **[({timestamp_str})]({video_link}): {topic_summary['content']}")
+                    video_link = f'https://mit.hosted.panopto.com/Panopto/Pages/Viewer.aspx?id={video_id}&start={int(timestamp_seconds)}'
+                    md_lines.append(f"*[▶️ {timestamp_str}]({video_link})*  ")
                 else:
-                    md_lines.append(f"**({i}) {topic_summary['title']} **({timestamp_str}): {topic_summary['content']}")
-            
-            # Add blank line between speakers
-            if speaker != list(summaries_data.keys())[-1]:
+                    md_lines.append(f"*{timestamp_str}*  ")
+                
+                # Topic content
                 md_lines.append("")
+                md_lines.append(topic_summary['content'])
+                md_lines.append("")
+                
+                # Add screenshots if available
+                if screenshots_data and 'screenshots' in topic and topic['screenshots']:
+                    md_lines.append("**Screenshots:**")
+                    md_lines.append("")  # Empty line before images
+                    
+                    # Add screenshots in a table (2 per row)
+                    screenshots = topic['screenshots']
+                    for j in range(0, len(screenshots), 2):
+                        row_screenshots = screenshots[j:j+2]
+                        row = []
+                        for ss in row_screenshots:
+                            caption = f"{ss['time_str']}"
+                            if ss['caption']:
+                                caption += f" - {ss['caption']}"
+                            row.append(f"[![Screenshot at {ss['time_str']}]({ss['data_url']})]({ss['data_url']})  \n{caption}")
+                        md_lines.append(" | ".join(row))
+                        md_lines.append("")  # Empty line after each row
+                
+                # Add back to top link
+                md_lines.append(f"[↑ Back to top](#{speaker_id})  ")
+                md_lines.append("---")  # Horizontal rule between topics
+                md_lines.append("")  # Empty line after horizontal rule
+        
+        # Add a final back to top
+        md_lines.append("")
+        md_lines.append("[↑ Back to top](#table-of-contents)")
         
         return '\n'.join(md_lines)
     
@@ -934,8 +1406,8 @@ a:hover { text-decoration: underline; }
             topics = self._extract_topics_from_summary(summary, video_id, transcript_data)
             
             # # Update timestamps to better match content if transcript data available
-            if transcript_data:
-                topics = self._update_topic_timestamps(topics, transcript_data)
+            # if transcript_data:
+            #     topics = self._update_topic_timestamps(topics, transcript_data)
             
             # Add batch info to each topic
             for topic in topics:
