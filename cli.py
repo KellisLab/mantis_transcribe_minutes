@@ -32,6 +32,9 @@ Examples:
   
   # Process Panopto URL (no speaker recognition available)
   python cli.py "https://mit.hosted.panopto.com/Panopto/Pages/Viewer.aspx?id=VIDEO_ID"
+ 
+  # Process Panopto ID (no speaker recognition available) with screenshots 
+  python cli.py "https://mit.hosted.panopto.com/Panopto/Pages/Viewer.aspx?id=VIDEO_ID" --use-screenshots
   
   # Process directory of files
   python cli.py ./recordings/ --speaker-recognition
@@ -98,6 +101,14 @@ Speaker Management:
         "--speaker-db-path",
         type=Path,
         help="Custom path for speaker database"
+    )
+    
+    # Screenshot options
+    screenshot_group = parser.add_argument_group("Screenshot Options")
+    screenshot_group.add_argument(
+        "--use-screenshots",
+        action="store_true",
+        help="Enable automatic screenshot generation from video (requires video input)"
     )
     
     # Processing options
@@ -179,6 +190,7 @@ Speaker Management:
             'skip_diarization': args.skip_diarization,
             'speaker_recognition': enable_speaker_recognition,
             'auto_add_speakers': args.auto_add_speakers,
+            'use_screenshots': args.use_screenshots,
         }
         
         # Add audio path for subtitle processing

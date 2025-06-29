@@ -66,7 +66,7 @@ class PipelineProcessor:
         
         # Route to appropriate processor
         if input_type in [InputType.PANOPTO_URL, InputType.PANOPTO_ID]:
-            return self._process_panopto(input_path, metadata, **kwargs)
+            return self._process_panopto(input_path, metadata, **kwargs) 
         
         elif input_type == InputType.MEDIA_FILE:
             return self._process_media(input_path, **kwargs)
@@ -160,7 +160,9 @@ class PipelineProcessor:
         
         # Process transcript
         transcript_proc = TranscriptProcessor(output_dir)
-        
+    
+        # result_transcript contains the filename of the extracted segments saved as vtt 
+            
         final_result = transcript_proc.process(
             subtitle_result['transcript_file'],
             video_id=video_id,
